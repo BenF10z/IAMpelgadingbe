@@ -184,24 +184,72 @@ exports.create = (req, res) => {
   });
 };
 
-// Retrieve all Transactions from the database (with condition and pagination).
+// Retrieve all Transactions from the database (with condition and optional pagination).
 exports.findAll = (req, res) => {
   const tanggal = req.query.tanggal;
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
-  const offset = (page - 1) * limit;
+  const page = req.query.page ? parseInt(req.query.page) : null;
+  const limit = req.query.limit ? parseInt(req.query.limit) : null;
+  
+  // If both page and limit are specified, use pagination
+  if (page && limit) {
+    const offset = (page - 1) * limit;
+    
+    // Get total count first
+    Transaction.getCount(tanggal, (err, total) => {
+      if (err) {
+        res.status(500).send({
+          message: err.message || "Some error occurred while counting transactions.",
+        });
+        return;
+      }
 
-  // Get total count first
-  Transaction.getCount(tanggal, (err, total) => {
-    if (err) {
-      res.status(500).send({
-        message: err.message || "Some error occurred while counting transactions.",
+      // Then get the paginated data
+      Transaction.getAll(tanggal, limit, offset, (err, data) => {
+        if (err) {
+          res.status(500).send({
+            message: err.message || "Some error occurred while retrieving transactions.",
+          });
+        } else {
+          // Format tanggal to dd-mm-yyyy
+          const formattedData = data.map((item) => {
+            if (item.tanggal) {
+              const dateObj = new Date(item.tanggal);
+              const day = String(dateObj.getDate()).padStart(2, "0");
+              const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+              const year = dateObj.getFullYear();
+              item.tanggal = `${day}-${month}-${year}`;
+            }
+
+            // Format waktu to match database format (HH:MM:SS)
+            if (item.waktu) {
+              const timeObj = new Date(item.waktu);
+              const hours = String(timeObj.getHours()).padStart(2, "0");
+              const minutes = String(timeObj.getMinutes()).padStart(2, "0");
+              const seconds = String(timeObj.getSeconds()).padStart(2, "0");
+              item.waktu = `${hours}:${minutes}:${seconds}`;
+            }
+            return item;
+          });
+
+          const totalPages = Math.ceil(total / limit);
+
+          res.send({
+            data: formattedData,
+            pagination: {
+              currentPage: page,
+              totalPages: totalPages,
+              totalItems: total,
+              itemsPerPage: limit,
+              hasNextPage: page < totalPages,
+              hasPreviousPage: page > 1
+            }
+          });
+        }
       });
-      return;
-    }
-
-    // Then get the paginated data
-    Transaction.getAll(tanggal, limit, offset, (err, data) => {
+    });
+  } else {
+    // No pagination - return all transactions
+    Transaction.getAll(tanggal, null, null, (err, data) => {
       if (err) {
         res.status(500).send({
           message: err.message || "Some error occurred while retrieving transactions.",
@@ -228,22 +276,11 @@ exports.findAll = (req, res) => {
           return item;
         });
 
-        const totalPages = Math.ceil(total / limit);
-
-        res.send({
-          data: formattedData,
-          pagination: {
-            currentPage: page,
-            totalPages: totalPages,
-            totalItems: total,
-            itemsPerPage: limit,
-            hasNextPage: page < totalPages,
-            hasPreviousPage: page > 1
-          }
-        });
+        // Return data directly without pagination wrapper
+        res.send(formattedData);
       }
     });
-  });
+  }
 };
 
 exports.findAllByDateRange = (req, res) => {

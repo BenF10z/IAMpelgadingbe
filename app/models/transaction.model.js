@@ -79,7 +79,8 @@ Transaction.getAll = (tanggal, limit, offset, result) => {
 
   query += " ORDER BY id DESC";
 
-  if (limit && offset !== undefined) {
+  // Only apply LIMIT and OFFSET if both are provided and not null
+  if (limit !== null && offset !== null) {
     query += " LIMIT ? OFFSET ?";
     queryParams.push(parseInt(limit), parseInt(offset));
   }
