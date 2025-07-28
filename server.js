@@ -6,7 +6,8 @@ dotenv.config();
 const app = express();
 
 var corsOptions = {
-  origin: "http://localhost:3000",
+  origin: ["http://localhost:3000", "*"],
+  credentials: true,
 };
 
 app.use(cors(corsOptions));
@@ -27,6 +28,6 @@ require("./app/routes/transaction.routes.js")(app);
 
 // set port, listen for requests
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}.`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server is running on all interfaces!.`);
 });
