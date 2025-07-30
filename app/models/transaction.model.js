@@ -1,4 +1,4 @@
-const sql = require("./db.js");
+const pool = require("./db.js"); // Changed from sql to pool
 
 // constructor
 const Transaction = function (transaction) {
@@ -13,8 +13,9 @@ const Transaction = function (transaction) {
 
 Transaction.create = (newTransaction, result) => {
   // Get the latest saldo
-  sql.query(
+  pool.execute(
     "SELECT saldo FROM transactions ORDER BY id DESC LIMIT 1",
+    [],
     (err, res) => {
       if (err) {
         console.log("error: ", err);
@@ -28,9 +29,17 @@ Transaction.create = (newTransaction, result) => {
       newTransaction.saldo = previousSaldo + pemasukan - pengeluaran;
 
       // Insert the transaction with calculated saldo
-      sql.query(
-        "INSERT INTO transactions SET ?",
-        newTransaction,
+      pool.execute(
+        "INSERT INTO transactions (tanggal, waktu, nama_akun, pemasukan, pengeluaran, saldo, keterangan) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          newTransaction.tanggal,
+          newTransaction.waktu,
+          newTransaction.nama_akun,
+          newTransaction.pemasukan,
+          newTransaction.pengeluaran,
+          newTransaction.saldo,
+          newTransaction.keterangan,
+        ],
         (err2, res2) => {
           if (err2) {
             console.log("error: ", err2);
@@ -50,7 +59,7 @@ Transaction.create = (newTransaction, result) => {
 };
 
 Transaction.findById = (id, result) => {
-  sql.query("SELECT * FROM transactions WHERE id = ?", id, (err, res) => {
+  pool.execute("SELECT * FROM transactions WHERE id = ?", [id], (err, res) => {
     if (err) {
       console.log("error: ", err);
       result(err, null);
@@ -85,7 +94,7 @@ Transaction.getAll = (tanggal, limit, offset, result) => {
     queryParams.push(parseInt(limit), parseInt(offset));
   }
 
-  sql.query(query, queryParams, (err, res) => {
+  pool.execute(query, queryParams, (err, res) => {
     if (err) {
       console.log("error: ", err);
       result(err, null);
@@ -107,7 +116,7 @@ Transaction.getCount = (tanggal, result) => {
     queryParams.push(`%${tanggal}%`);
   }
 
-  sql.query(query, queryParams, (err, res) => {
+  pool.execute(query, queryParams, (err, res) => {
     if (err) {
       console.log("error: ", err);
       result(err, null);
@@ -119,7 +128,8 @@ Transaction.getCount = (tanggal, result) => {
 };
 
 Transaction.getAllByDateRange = (start, end, limit, offset, result) => {
-  let query = "SELECT * FROM transactions WHERE tanggal BETWEEN ? AND ? ORDER BY tanggal ASC";
+  let query =
+    "SELECT * FROM transactions WHERE tanggal BETWEEN ? AND ? ORDER BY tanggal ASC";
   let queryParams = [start, end];
 
   if (limit && offset !== undefined) {
@@ -127,7 +137,7 @@ Transaction.getAllByDateRange = (start, end, limit, offset, result) => {
     queryParams.push(parseInt(limit), parseInt(offset));
   }
 
-  sql.query(query, queryParams, (err, res) => {
+  pool.execute(query, queryParams, (err, res) => {
     if (err) {
       console.log("error: ", err);
       result(err, null);
@@ -138,7 +148,7 @@ Transaction.getAllByDateRange = (start, end, limit, offset, result) => {
 };
 
 Transaction.getCountByDateRange = (start, end, result) => {
-  sql.query(
+  pool.execute(
     "SELECT COUNT(*) as total FROM transactions WHERE tanggal BETWEEN ? AND ?",
     [start, end],
     (err, res) => {
@@ -161,7 +171,7 @@ Transaction.getAllByAccount = (nama_akun, limit, offset, result) => {
     queryParams.push(parseInt(limit), parseInt(offset));
   }
 
-  sql.query(query, queryParams, (err, res) => {
+  pool.execute(query, queryParams, (err, res) => {
     if (err) {
       console.log("error: ", err);
       result(err, null);
@@ -174,7 +184,7 @@ Transaction.getAllByAccount = (nama_akun, limit, offset, result) => {
 };
 
 Transaction.getCountByAccount = (nama_akun, result) => {
-  sql.query(
+  pool.execute(
     "SELECT COUNT(*) as total FROM transactions WHERE nama_akun = ?",
     [nama_akun],
     (err, res) => {
@@ -190,7 +200,7 @@ Transaction.getCountByAccount = (nama_akun, result) => {
 
 Transaction.updateById = (id, transaction, result) => {
   // First get the original transaction to preserve any fields not being updated
-  sql.query("SELECT * FROM transactions WHERE id = ?", id, (err, res) => {
+  pool.execute("SELECT * FROM transactions WHERE id = ?", [id], (err, res) => {
     if (err) {
       console.log("error: ", err);
       result(err, null);
@@ -203,13 +213,13 @@ Transaction.updateById = (id, transaction, result) => {
     }
 
     const originalTransaction = res[0];
-    
+
     // Calculate saldo adjustment
     const originalPemasukan = originalTransaction.pemasukan || 0;
     const originalPengeluaran = originalTransaction.pengeluaran || 0;
     const newPemasukan = transaction.pemasukan || originalPemasukan;
     const newPengeluaran = transaction.pengeluaran || originalPengeluaran;
-    
+
     // Merge with original values for fields not provided
     const updatedTransaction = {
       tanggal: transaction.tanggal || originalTransaction.tanggal,
@@ -222,7 +232,7 @@ Transaction.updateById = (id, transaction, result) => {
     };
 
     // Update this transaction
-    sql.query(
+    pool.execute(
       "UPDATE transactions SET tanggal = ?, waktu = ?, pemasukan = ?, pengeluaran = ?, nama_akun = ?, keterangan = ? WHERE id = ?",
       [
         updatedTransaction.tanggal,
@@ -231,7 +241,7 @@ Transaction.updateById = (id, transaction, result) => {
         updatedTransaction.pengeluaran,
         updatedTransaction.nama_akun,
         updatedTransaction.keterangan,
-        id
+        id,
       ],
       (err2, res2) => {
         if (err2) {
@@ -241,7 +251,7 @@ Transaction.updateById = (id, transaction, result) => {
         }
 
         // Calculate saldo for this transaction and all subsequent transactions
-        sql.query(
+        pool.execute(
           "SELECT * FROM transactions WHERE id <= ? ORDER BY id ASC",
           [id],
           (err3, rows) => {
@@ -250,17 +260,17 @@ Transaction.updateById = (id, transaction, result) => {
               result(err3, null);
               return;
             }
-            
+
             // Recalculate saldo up to the modified transaction
             let saldo = 0;
-            rows.forEach(row => {
+            rows.forEach((row) => {
               saldo += (row.pemasukan || 0) - (row.pengeluaran || 0);
-              
+
               // Update this transaction's saldo if it's the one we're editing
               if (row.id == id) {
                 updatedTransaction.saldo = saldo;
-                
-                sql.query(
+
+                pool.execute(
                   "UPDATE transactions SET saldo = ? WHERE id = ?",
                   [saldo, id],
                   (err4) => {
@@ -272,25 +282,31 @@ Transaction.updateById = (id, transaction, result) => {
                 );
               }
             });
-            
+
             // Now update all subsequent transactions
-            const netChange = (newPemasukan - newPengeluaran) - (originalPemasukan - originalPengeluaran);
+            const netChange =
+              newPemasukan -
+              newPengeluaran -
+              (originalPemasukan - originalPengeluaran);
             if (netChange !== 0) {
-              sql.query(
+              pool.execute(
                 "SELECT * FROM transactions WHERE id > ? ORDER BY id ASC",
                 [id],
                 (err4, laterRows) => {
                   if (err4 || laterRows.length === 0) {
                     // No later rows or error, just return the result
-                    console.log("updated transaction: ", { id: id, ...updatedTransaction });
+                    console.log("updated transaction: ", {
+                      id: id,
+                      ...updatedTransaction,
+                    });
                     result(null, { id: id, ...updatedTransaction });
                     return;
                   }
-                  
+
                   const updatePromises = laterRows.map((row) => {
                     const newSaldo = row.saldo + netChange;
                     return new Promise((resolve, reject) => {
-                      sql.query(
+                      pool.execute(
                         "UPDATE transactions SET saldo = ? WHERE id = ?",
                         [newSaldo, row.id],
                         (err5) => {
@@ -300,10 +316,13 @@ Transaction.updateById = (id, transaction, result) => {
                       );
                     });
                   });
-                  
+
                   Promise.all(updatePromises)
                     .then(() => {
-                      console.log("updated transaction: ", { id: id, ...updatedTransaction });
+                      console.log("updated transaction: ", {
+                        id: id,
+                        ...updatedTransaction,
+                      });
                       result(null, { id: id, ...updatedTransaction });
                     })
                     .catch((err6) => {
@@ -314,7 +333,10 @@ Transaction.updateById = (id, transaction, result) => {
               );
             } else {
               // No saldo changes needed for later transactions
-              console.log("updated transaction: ", { id: id, ...updatedTransaction });
+              console.log("updated transaction: ", {
+                id: id,
+                ...updatedTransaction,
+              });
               result(null, { id: id, ...updatedTransaction });
             }
           }
@@ -326,7 +348,7 @@ Transaction.updateById = (id, transaction, result) => {
 
 Transaction.remove = (id, result) => {
   // First, get the transaction to be deleted
-  sql.query("SELECT * FROM transactions WHERE id = ?", id, (err, res) => {
+  pool.execute("SELECT * FROM transactions WHERE id = ?", [id], (err, res) => {
     if (err) {
       console.log("error: ", err);
       result(err, null);
@@ -344,56 +366,60 @@ Transaction.remove = (id, result) => {
     const pengeluaran = deletedTransaction.pengeluaran || 0;
 
     // Delete the transaction
-    sql.query("DELETE FROM transactions WHERE id = ?", id, (err2, res2) => {
-      if (err2) {
-        console.log("error: ", err2);
-        result(err2, null);
-        return;
-      }
-
-      // Update saldo for all subsequent transactions
-      sql.query(
-        "SELECT * FROM transactions WHERE id > ? ORDER BY id ASC",
-        id,
-        (err3, rows) => {
-          if (err3) {
-            console.log("error: ", err3);
-            result(err3, null);
-            return;
-          }
-
-          let saldoAdjustment = pemasukan - pengeluaran;
-          const updatePromises = rows.map((row) => {
-            const newSaldo = row.saldo - saldoAdjustment;
-            return new Promise((resolve, reject) => {
-              sql.query(
-                "UPDATE transactions SET saldo = ? WHERE id = ?",
-                [newSaldo, row.id],
-                (err4) => {
-                  if (err4) reject(err4);
-                  else resolve();
-                }
-              );
-            });
-          });
-
-          Promise.all(updatePromises)
-            .then(() => {
-              console.log("deleted transaction with id: ", id);
-              result(null, res2);
-            })
-            .catch((err5) => {
-              console.log("error: ", err5);
-              result(err5, null);
-            });
+    pool.execute(
+      "DELETE FROM transactions WHERE id = ?",
+      [id],
+      (err2, res2) => {
+        if (err2) {
+          console.log("error: ", err2);
+          result(err2, null);
+          return;
         }
-      );
-    });
+
+        // Update saldo for all subsequent transactions
+        pool.execute(
+          "SELECT * FROM transactions WHERE id > ? ORDER BY id ASC",
+          [id],
+          (err3, rows) => {
+            if (err3) {
+              console.log("error: ", err3);
+              result(err3, null);
+              return;
+            }
+
+            let saldoAdjustment = pemasukan - pengeluaran;
+            const updatePromises = rows.map((row) => {
+              const newSaldo = row.saldo - saldoAdjustment;
+              return new Promise((resolve, reject) => {
+                pool.execute(
+                  "UPDATE transactions SET saldo = ? WHERE id = ?",
+                  [newSaldo, row.id],
+                  (err4) => {
+                    if (err4) reject(err4);
+                    else resolve();
+                  }
+                );
+              });
+            });
+
+            Promise.all(updatePromises)
+              .then(() => {
+                console.log("deleted transaction with id: ", id);
+                result(null, res2);
+              })
+              .catch((err5) => {
+                console.log("error: ", err5);
+                result(err5, null);
+              });
+          }
+        );
+      }
+    );
   });
 };
 
 Transaction.removeAll = (result) => {
-  sql.query("DELETE FROM transactions", (err, res) => {
+  pool.execute("DELETE FROM transactions", [], (err, res) => {
     if (err) {
       console.log("error: ", err);
       result(err, null);
