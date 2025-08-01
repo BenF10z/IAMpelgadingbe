@@ -91,10 +91,11 @@ Transaction.getAll = (tanggal, limit, offset, result) => {
   // Only apply LIMIT and OFFSET if both are provided and not null
   if (limit !== null && offset !== null) {
     query += " LIMIT ? OFFSET ?";
-    queryParams.push(parseInt(limit), parseInt(offset));
+    queryParams.push(parseInt(limit, 10), parseInt(offset, 10));
   }
 
-  pool.execute(query, queryParams, (err, res) => {
+  // Use pool.query() instead of pool.execute() for dynamic queries
+  pool.query(query, queryParams, (err, res) => {
     if (err) {
       console.log("error: ", err);
       result(err, null);
@@ -134,8 +135,24 @@ Transaction.getAllByDateRange = (start, end, limit, offset, result) => {
 
   if (limit && offset !== undefined) {
     query += " LIMIT ? OFFSET ?";
-    queryParams.push(parseInt(limit), parseInt(offset));
+    const limitValue = parseInt(limit, 10);
+    const offsetValue = parseInt(offset, 10);
+
+    if (
+      isNaN(limitValue) ||
+      isNaN(offsetValue) ||
+      limitValue < 0 ||
+      offsetValue < 0
+    ) {
+      result(new Error("Invalid pagination parameters"), null);
+      return;
+    }
+
+    queryParams.push(limitValue, offsetValue);
   }
+
+  console.log("DateRange Query:", query);
+  console.log("DateRange Params:", queryParams);
 
   pool.execute(query, queryParams, (err, res) => {
     if (err) {
@@ -168,8 +185,24 @@ Transaction.getAllByAccount = (nama_akun, limit, offset, result) => {
 
   if (limit && offset !== undefined) {
     query += " LIMIT ? OFFSET ?";
-    queryParams.push(parseInt(limit), parseInt(offset));
+    const limitValue = parseInt(limit, 10);
+    const offsetValue = parseInt(offset, 10);
+
+    if (
+      isNaN(limitValue) ||
+      isNaN(offsetValue) ||
+      limitValue < 0 ||
+      offsetValue < 0
+    ) {
+      result(new Error("Invalid pagination parameters"), null);
+      return;
+    }
+
+    queryParams.push(limitValue, offsetValue);
   }
+
+  console.log("Account Query:", query);
+  console.log("Account Params:", queryParams);
 
   pool.execute(query, queryParams, (err, res) => {
     if (err) {
